@@ -1,0 +1,121 @@
+#include <Wire.h>
+#include <WiFi.h> // Biblioteca para conexão Wi-Fi
+#include <HTTPClient.h> // Biblioteca para requisições HTTP
+#include "MAX30105.h"
+
+MAX30105 particleSensor;
+
+// Informações do Wi-Fi
+const char* ssid = "";         // Nome da rede Wi-Fi
+const char* password = ""; // Senha do Wi-Fi
+
+unsigned long lastMeasurementTime = 0; // Controla o tempo das medições
+const unsigned long MEASUREMENT_INTERVAL = 3000; // Intervalo de 3 segundos
+
+bool isWifiConnected = false; // Flag para verificar se o Wi-Fi está conectado
+const char* serverUrl = "https://db85-2804-14d-4c84-9025-7906-1d6b-2b05-a676.ngrok-free.app/sensor/create-bpm"; // Endpoint do backend
+
+void setup() {
+  Serial.begin(115200);
+  Serial.println("Initializing...");
+
+  // Inicializa o sensor MAX30102
+  if (!particleSensor.begin(Wire, I2C_SPEED_FAST)) {
+    Serial.println("MAX30102 was not found. Please check wiring/power.");
+    while (1);
+  }
+  particleSensor.setup(); // Configura o sensor com configurações padrão
+  particleSensor.setPulseAmplitudeRed(0x0A); // LED vermelho para indicar operação
+  particleSensor.setPulseAmplitudeGreen(0);  // LED verde desligado
+
+  // Conexão Wi-Fi
+  Serial.print("Connecting to WiFi");
+  WiFi.begin(ssid, password); // Inicia a conexão com o Wi-Fi
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi connected!");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP()); // Exibe o IP atribuído ao ESP32
+
+  isWifiConnected = true; // Define que o Wi-Fi está conectado
+}
+
+void loop() {
+  // Verifica se o Wi-Fi está conectado antes de calcular o BPM
+  if (!isWifiConnected) {
+    Serial.println("Wi-Fi not connected. Waiting...");
+    delay(1000); // Aguarda 1 segundo antes de tentar novamente
+    return;
+  }
+
+  // Executa as medições a cada 3 segundos
+  if (millis() - lastMeasurementTime >= MEASUREMENT_INTERVAL) {
+    lastMeasurementTime = millis(); // Atualiza o tempo da última medição
+
+    long irValue = particleSensor.getIR(); // Obtém o valor IR
+    Serial.print("IR Value: ");
+    Serial.println(irValue);
+
+    // Calcula os batimentos cardíacos (BPM)
+    float beatsPerMinute = calculateBPMFromIR(irValue);
+
+    // Exibe o valor calculado e envia ao servidor
+    Serial.print("BPM: ");
+    Serial.println(beatsPerMinute);
+
+    // Envia os dados (mesmo se for 0)
+    sendBpmToServer(beatsPerMinute);
+  }
+}
+
+// Função para calcular BPM a partir de IR
+float calculateBPMFromIR(long irValue) {
+  // Verifica se o valor IR está em uma faixa válida
+  if (irValue < 50000 || irValue > 140000) {
+    return 0; // Valor de IR inválido ou dedo não detectado
+  }
+
+  // Fórmula para calcular BPM baseada em valores de IR
+  // A conversão será proporcional ao intervalo
+  float normalizedIR = (float)(irValue - 50000) / (140000 - 50000); // Normaliza o IR
+  float bpm = 40 + (normalizedIR * 80); // Converte para um intervalo de 40 a 120 BPM
+
+  // Garante que o BPM está dentro da faixa aceitável
+  if (bpm < 40 || bpm > 120) {
+    return 0; // Fora da faixa realista de frequência cardíaca
+  }
+
+  return bpm;
+}
+
+// Função para enviar BPM ao servidor
+void sendBpmToServer(float bpm) {
+  if (WiFi.status() == WL_CONNECTED) { // Verifica se está conectado ao Wi-Fi
+    HTTPClient http;
+
+    // Configura a URL do servidor
+    http.begin(serverUrl);
+    http.addHeader("Content-Type", "application/json"); // Define o tipo do conteúdo
+
+    // Cria o payload no formato JSON
+    String payload = "{\"bpm\": " + String(bpm, 2) + "}";
+
+    // Envia a requisição POST
+    int httpResponseCode = http.POST(payload);
+
+    // Verifica o resultado
+    if (httpResponseCode > 0) {
+      Serial.print("HTTP Response Code: ");
+      Serial.println(httpResponseCode);
+    } else {
+      Serial.print("Error on sending POST: ");
+      Serial.println(http.errorToString(httpResponseCode).c_str());
+    }
+
+    http.end(); // Finaliza a conexão HTTP
+  } else {
+    Serial.println("Wi-Fi not connected. Can't send BPM to server.");
+  }
+}

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monitor de Batimentos Cardíacos ATUALIZADO aaaaaaaaaaaaaaaaaaaa</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background-color: #f5f5f5;
+    }
+    .heart-rate {
+      font-size: 2rem;
+      margin: 20px 0;
+    }
+    .heart {
+      font-size: 5rem;
+      animation: beat 1s infinite;
+    }
+    .heart.high {
+      color: green;
+    }
+    .heart.low {
+      color: red;
+    }
+    @keyframes beat {
+      0%, 100% {
+        transform: scale(1);
+      }
+      50% {
+        transform: scale(1.2);
+      }
+    }
+    .emoji {
+      font-size: 4rem;
+    }
+    .loading {
+      font-size: 1.5rem;
+      color: #999;
+    }
+  </style>
+</head>
+<body>
+  <h1>Monitor de Batimentos Cardíacos ATUALIZADO</h1>
+  <div class="heart-rate">Batimentos Cardíacos: <span id="rate">--</span></div>
+  <div class="heart" id="heart">❤️</div>
+  <div class="emoji" id="emoji">😊</div>
+  <div class="loading" id="loading">Aguarde...</div>
+
+  <script>
+    async function fetchHeartRate() {
+      const loadingElement = document.getElementById('loading');
+      const rateElement = document.getElementById('rate');
+      const heartElement = document.getElementById('heart');
+      const emojiElement = document.getElementById('emoji');
+
+      // Exibe a mensagem "Aguarde" enquanto a requisição está sendo feita
+      loadingElement.style.display = 'block';
+      rateElement.textContent = '--';
+      emojiElement.textContent = '';
+      heartElement.classList.remove('high', 'low');
+
+      try {
+        // Substitua pela URL da sua API
+        const response = await fetch('https://db85-2804-14d-4c84-9025-7906-1d6b-2b05-a676.ngrok-free.app/sensor/get-bpm');
+        const data = await response.json();
+        
+ 
+
+
+        // Atualiza o valor na tela
+        rateElement.textContent = data.bpm;
+console.log(data.bpm)
+        // Atualiza animação e emoji
+        if (data.bpm > 60) {
+          heartElement.classList.add('high');
+          heartElement.classList.remove('low');
+          emojiElement.textContent = '😊';
+        } else {
+          heartElement.classList.add('low');
+          heartElement.classList.remove('high');
+          emojiElement.textContent = '😢';
+        }if (data.bpm === 0) {
+          rateElement.textContent = 'Aguardando dados...';
+          emojiElement.textContent = '';
+        }
+      } catch (error) {
+        console.error('Erro ao buscar dados:', error);
+        rateElement.textContent = 'Erro ao obter dados';
+        emojiElement.textContent = '😢';
+      } finally {
+        // Oculta a mensagem "Aguarde" quando a requisição termina
+        loadingElement.style.display = 'none';
+      }
+    }
+
+    // Chama a função a cada 5 segundos
+    fetchHeartRate();
+    setInterval(fetchHeartRate, 5000);
+  </script>
+</body>
+</html>
